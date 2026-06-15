@@ -28,6 +28,7 @@ export default function ContractAnalysis() {
   const [selectedCommunityId, setSelectedCommunityId] = useState('')
   const [analysis, setAnalysis] = useState<ContractAnalysisType | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [dataSource, setDataSource] = useState<'excel' | 'mock' | null>(null)
 
   const contractInputRef = useRef<HTMLInputElement>(null)
   const budgetInputRef = useRef<HTMLInputElement>(null)
@@ -88,15 +89,131 @@ export default function ContractAnalysis() {
     else setBudgetDrag(false)
   }, [])
 
+  const extractActualValue = useCallback((category: string): number | null => {
+    if (!budgetUpload.parsed || budgetUpload.parsed.length === 0) return null
+
+    const categoryKeys = ['类别', '分类', 'category', '类型', '项目']
+    const valueKeys = ['实际表现', '实际值', 'actual', 'actualValue', '数值', '值', '数量']
+
+    for (const row of budgetUpload.parsed) {
+      const rowData = row as Record<string, unknown>
+      let categoryMatch = false
+      let actualValue: number | null = null
+
+      for (const key of Object.keys(rowData)) {
+        const lowerKey = key.toLowerCase().trim()
+        const value = rowData[key]
+
+        for (const catKey of categoryKeys) {
+          if (lowerKey.includes(catKey.toLowerCase()) || key.includes(catKey)) {
+            const cellValue = String(value).trim()
+            if (cellValue.includes(category) || category.includes(cellValue)) {
+              categoryMatch = true
+            }
+          }
+        }
+
+        for (const valKey of valueKeys) {
+          if (lowerKey.includes(valKey.toLowerCase()) || key.includes(valKey)) {
+            const num = parseFloat(String(value).replace(/[^\d.]/g, ''))
+            if (!isNaN(num)) {
+              actualValue = num
+            }
+          }
+        }
+      }
+
+      if (!categoryMatch) {
+        for (const key of Object.keys(rowData)) {
+          const value = rowData[key]
+          const cellValue = String(value).trim()
+          if (cellValue.includes(category) || category.includes(cellValue)) {
+            categoryMatch = true
+            break
+          }
+        }
+      }
+
+      if (!actualValue) {
+        for (const key of Object.keys(rowData)) {
+          const value = rowData[key]
+          if (typeof value === 'number') {
+            actualValue = value
+            break
+          }
+          const num = parseFloat(String(value).replace(/[^\d.]/g, ''))
+          if (!isNaN(num)) {
+            actualValue = num
+            break
+          }
+        }
+      }
+
+      if (categoryMatch && actualValue !== null) {
+        return actualValue
+      }
+    }
+
+    return null
+  }, [budgetUpload.parsed])
+
+  const isButtonDisabled = !contractUpload.name || !budgetUpload.name || !selectedCommunityId || isAnalyzing
+  const buttonTooltip = !contractUpload.name
+    ? '请先上传物业服务合同'
+    : !budgetUpload.name
+    ? '请先上传年度预算表'
+    : !selectedCommunityId
+    ? '请先选择社区'
+    : ''
+
   const handleAnalyze = useCallback(() => {
-    if (!selectedCommunityId) return
+    if (isButtonDisabled) return
     setIsAnalyzing(true)
     setTimeout(() => {
-      const result = generateContractAnalysis(selectedCommunityId)
-      setAnalysis(result)
+      const mockResult = generateContractAnalysis(selectedCommunityId)
+      let usedExcelData = false
+
+      const comparisons = mockResult.standards.map((standard) => {
+        const standardValue = standard.target
+        let actualValue: number | null = null
+
+        if (budgetUpload.parsed) {
+          actualValue = extractActualValue(standard.category)
+        }
+
+        let finalActualValue: number
+        let deviation: number
+        let isAbnormal: boolean
+
+        if (actualValue !== null) {
+          usedExcelData = true
+          finalActualValue = actualValue
+          deviation = Math.round(Math.abs((actualValue - standardValue) / standardValue * 100) * 100) / 100
+          isAbnormal = deviation > 15
+        } else {
+          const mockComparison = mockResult.comparisons.find((c) => c.category === standard.category)
+          finalActualValue = mockComparison?.actualValue ?? standardValue
+          deviation = mockComparison?.deviation ?? 0
+          isAbnormal = mockComparison?.isAbnormal ?? false
+        }
+
+        return {
+          category: standard.category,
+          standardValue,
+          actualValue: Math.round(finalActualValue * 100) / 100,
+          deviation,
+          isAbnormal,
+        }
+      })
+
+      setAnalysis({
+        ...mockResult,
+        comparisons,
+      })
+      setDataSource(usedExcelData ? 'excel' : 'mock')
       setIsAnalyzing(false)
     }, 800)
-  }, [selectedCommunityId])
+  }, [selectedCommunityId, budgetUpload.parsed, isButtonDisabled, extractActualValue])
 
   const summaryStats = useMemo(() => {
     if (!analysis) return null
@@ -312,19 +429,33 @@ export default function ContractAnalysis() {
             </option>
           ))}
         </select>
-        <button
-          onClick={handleAnalyze}
-          disabled={!selectedCommunityId || isAnalyzing}
-          className="btn-primary flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Search size={16} />
-          {isAnalyzing ? '分析中...' : '开始分析'}
-        </button>
+        <div className="relative group">
+          <button
+            onClick={handleAnalyze}
+            disabled={isButtonDisabled}
+            className="btn-primary flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Search size={16} />
+            {isAnalyzing ? '分析中...' : '开始分析'}
+          </button>
+          {isButtonDisabled && buttonTooltip && (
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-2 bg-navy-800 border border-navy-600 rounded-lg text-xs text-gray-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+              {buttonTooltip}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-8 border-transparent border-b-navy-800" />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Analysis Result */}
       {analysis && summaryStats && (
         <>
+          {/* Data Source */}
+          <div className={`text-sm px-4 py-2 rounded-lg ${dataSource === 'excel' ? 'bg-cyber-500/10 text-cyber-400' : 'bg-alert-orange/10 text-alert-orange'}`}>
+            数据来源：{dataSource === 'excel' ? '已上传预算表' : '模拟数据'}
+            {dataSource === 'mock' && <span className="ml-2 text-xs text-gray-500">（未找到匹配的Excel数据列，已使用默认数据）</span>}
+          </div>
+
           {/* Summary Stats */}
           <div className="grid grid-cols-3 gap-5">
             <div className="card text-center">

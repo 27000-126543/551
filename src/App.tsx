@@ -15,6 +15,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+const ADMIN_ROLES = ['group_admin', 'regional_director'] as const
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const currentUser = useAppStore((s) => s.currentUser)
+  if (!currentUser || !ADMIN_ROLES.includes(currentUser.role as typeof ADMIN_ROLES[number])) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <>{children}</>
+}
+
 export default function App() {
   return (
     <Router>
@@ -34,7 +44,11 @@ export default function App() {
           <Route path="alerts" element={<AlertCenter />} />
           <Route path="contracts" element={<ContractAnalysis />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="admin" element={<Admin />} />
+          <Route path="admin" element={
+            <AdminRoute>
+              <Admin />
+            </AdminRoute>
+          } />
         </Route>
       </Routes>
     </Router>

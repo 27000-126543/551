@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import ReactECharts from 'echarts-for-react'
 import {
   BarChart3,
@@ -12,6 +12,21 @@ import {
 import { useAppStore } from '../store/useAppStore'
 import { weeklyReports } from '../data/mockData'
 import type { WeeklyReport } from '../types'
+
+function highlightNumbers(text: string): React.ReactNode {
+  const regex = /([\d.]+[%小时次天]+)/g
+  const parts = text.split(regex)
+  return parts.map((part, idx) => {
+    if (part.match(regex)) {
+      return (
+        <span key={idx} className="text-alert-orange font-bold">
+          {part}
+        </span>
+      )
+    }
+    return part
+  })
+}
 
 export default function Reports() {
   const { communities, getFilteredCommunities, selectedCommunity, setSelectedCommunity } = useAppStore()
@@ -31,6 +46,55 @@ export default function Reports() {
   const weekRange = report
     ? `${report.weekStart} ~ ${report.weekEnd}`
     : ''
+
+  const handleExport = useCallback(() => {
+    if (!report) return
+
+    const totalComplaints = Object.values(report.complaintTypeDistribution).reduce((a, b) => a + b, 0)
+
+    let content = ''
+    content += '========================================\n'
+    content += '           运营诊断周报\n'
+    content += '========================================\n\n'
+    content += `社区名称：${report.communityName}\n`
+    content += `报告周期：${weekRange}\n\n`
+
+    content += '----------------------------------------\n'
+    content += '                关键指标\n'
+    content += '----------------------------------------\n'
+    content += `费用收缴率同比：${report.feeCollectionYoY >= 0 ? '+' : ''}${report.feeCollectionYoY.toFixed(1)}%\n`
+    content += `费用收缴率环比：${report.feeCollectionMoM >= 0 ? '+' : ''}${report.feeCollectionMoM.toFixed(1)}%\n`
+    content += `平均维修响应时长：${report.avgMaintenanceResponseHours.toFixed(1)} 小时\n\n`
+
+    content += '----------------------------------------\n'
+    content += '            投诉类型分布\n'
+    content += '----------------------------------------\n'
+    for (const [type, count] of Object.entries(report.complaintTypeDistribution)) {
+      const percentage = totalComplaints > 0 ? ((count / totalComplaints) * 100).toFixed(1) : '0.0'
+      content += `${type}：${count} 件 (${percentage}%)\n`
+    }
+    content += `合计：${totalComplaints} 件\n\n`
+
+    content += '----------------------------------------\n'
+    content += '              优化建议\n'
+    content += '----------------------------------------\n'
+    report.suggestions.forEach((suggestion, idx) => {
+      content += `${idx + 1}. ${suggestion}\n`
+    })
+    content += '\n========================================\n'
+    content += `报告生成时间：${new Date().toLocaleString('zh-CN')}\n`
+    content += '========================================\n'
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `运营诊断报告_${report.communityName}_${report.weekStart}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, [report, weekRange])
 
   const feeTrendOption = useMemo(() => {
     if (!report) return {}
@@ -264,7 +328,7 @@ export default function Reports() {
               </option>
             ))}
           </select>
-          <button className="btn-secondary flex items-center gap-2 text-sm">
+          <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-sm">
             <Download size={14} />
             导出报告
           </button>
@@ -409,24 +473,19 @@ export default function Reports() {
           优化建议
         </h3>
         <div className="space-y-3">
-          {report.suggestions.map((suggestion, idx) => {
-            const match = suggestion.match(/[\d.]+[%小时次天]/)
-            return (
-              <div
-                key={idx}
-                className="flex items-start gap-3 rounded-lg px-4 py-3 bg-navy-900/50 border border-navy-600/50"
-              >
-                <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-alert-orange/15 flex items-center justify-center">
-                  <Lightbulb size={12} className="text-alert-orange" />
-                </div>
-                <p className="text-sm text-gray-300 leading-relaxed">
-                  {match
-                    ? suggestion.replace(match[0], `<span class="text-alert-orange font-bold">${match[0]}</span>`)
-                    : suggestion}
-                </p>
+          {report.suggestions.map((suggestion, idx) => (
+            <div
+              key={idx}
+              className="flex items-start gap-3 rounded-lg px-4 py-3 bg-navy-900/50 border border-navy-600/50"
+            >
+              <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-alert-orange/15 flex items-center justify-center">
+                <Lightbulb size={12} className="text-alert-orange" />
               </div>
-            )
-          })}
+              <p className="text-sm text-gray-300 leading-relaxed">
+                {highlightNumbers(suggestion)}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
+import { useNavigate } from 'react-router-dom'
 import {
   TrendingUp,
   TrendingDown,
@@ -9,9 +10,11 @@ import {
   Heart,
   AlertTriangle,
   MapPin,
+  ArrowUpDown,
+  ChevronRight,
 } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
-import { PROVINCES, REGIONS } from '../types'
+import { PROVINCES, REGIONS, type Community } from '../types'
 
 function getScoreColor(score: number): string {
   if (score >= 90) return '#00D4AA'
@@ -29,7 +32,12 @@ function getTrend(current: number, baseline: number): { up: boolean; pct: string
   }
 }
 
+type SortType = 'failureRateDesc' | 'collectionRateAsc' | 'satisfactionDesc'
+
 export default function Dashboard() {
+  const navigate = useNavigate()
+  const [sortType, setSortType] = useState<SortType>('failureRateDesc')
+
   const {
     selectedProvince,
     setSelectedProvince,
@@ -82,10 +90,14 @@ export default function Dashboard() {
     }))
   }, [provinceStats])
 
-  const failureRankOption = useMemo(() => {
-    const sorted = [...communities]
+  const failureRankSorted = useMemo(() => {
+    return [...communities]
       .sort((a, b) => b.equipmentFailureRate - a.equipmentFailureRate)
       .slice(0, 15)
+  }, [communities])
+
+  const failureRankOption = useMemo(() => {
+    const sorted = failureRankSorted
     return {
       tooltip: {
         trigger: 'axis' as const,
@@ -137,7 +149,40 @@ export default function Dashboard() {
         },
       ],
     }
-  }, [communities])
+  }, [failureRankSorted])
+
+  const onChartEvents = useMemo(() => ({
+    click: (params: { name: string }) => {
+      const community = failureRankSorted.find((c) => c.name === params.name)
+      if (community) {
+        navigate(`/community/${community.id}`)
+      }
+    },
+  }), [failureRankSorted, navigate])
+
+  const sortedCommunities = useMemo(() => {
+    const sorted = [...communities]
+    switch (sortType) {
+      case 'failureRateDesc':
+        return sorted.sort((a, b) => b.equipmentFailureRate - a.equipmentFailureRate)
+      case 'collectionRateAsc':
+        return sorted.sort((a, b) => a.feeCollectionRate - b.feeCollectionRate)
+      case 'satisfactionDesc':
+        return sorted.sort((a, b) => b.satisfactionScore - a.satisfactionScore)
+      default:
+        return sorted
+    }
+  }, [communities, sortType])
+
+  const handleRowClick = (community: Community) => {
+    navigate(`/community/${community.id}`)
+  }
+
+  const sortOptions: { value: SortType; label: string }[] = [
+    { value: 'failureRateDesc', label: '按设备故障率降序' },
+    { value: 'collectionRateAsc', label: '按收缴率升序' },
+    { value: 'satisfactionDesc', label: '按满意度降序' },
+  ]
 
   const statusLabels: Record<string, string> = {
     pending: '待确认',
@@ -345,6 +390,7 @@ export default function Dashboard() {
             option={failureRankOption}
             style={{ height: '520px' }}
             opts={{ renderer: 'canvas' }}
+            onEvents={onChartEvents}
           />
         </div>
       </div>
@@ -410,6 +456,125 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Community List Panel */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2">
+            <MapPin size={16} className="text-cyber-400" />
+            社区列表
+          </h3>
+          <div className="flex items-center gap-2">
+            <ArrowUpDown size={14} className="text-gray-500" />
+            {sortOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setSortType(option.value)}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-200 ${
+                  sortType === option.value
+                    ? 'bg-cyber-500/20 text-cyber-400 border border-cyber-500/30'
+                    : 'bg-navy-800 text-gray-400 border border-navy-600 hover:border-cyber-500/30 hover:text-gray-300'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-xs text-gray-500 border-b border-navy-700">
+                <th className="pb-3 font-medium">社区名称</th>
+                <th className="pb-3 font-medium">省份</th>
+                <th className="pb-3 font-medium text-right">设备完好率</th>
+                <th className="pb-3 font-medium text-right">物业费收缴率</th>
+                <th className="pb-3 font-medium text-right">投诉响应率</th>
+                <th className="pb-3 font-medium text-right">业主满意度</th>
+                <th className="pb-3 font-medium text-right">设备故障率</th>
+                <th className="pb-3 font-medium text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedCommunities.map((community) => (
+                <tr
+                  key={community.id}
+                  onClick={() => handleRowClick(community)}
+                  className="border-b border-navy-800 hover:bg-cyber-500/5 transition-colors cursor-pointer group/row"
+                >
+                  <td className="py-3">
+                    <span className="text-sm text-gray-200 group-hover/row:text-cyber-400 transition-colors">
+                      {community.name}
+                    </span>
+                  </td>
+                  <td className="py-3">
+                    <span className="text-sm text-gray-400">{community.province}</span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <span
+                      className="text-sm font-mono font-medium"
+                      style={{ color: getScoreColor(community.equipmentIntactRate) }}
+                    >
+                      {community.equipmentIntactRate.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <span
+                      className="text-sm font-mono font-medium"
+                      style={{ color: getScoreColor(community.feeCollectionRate) }}
+                    >
+                      {community.feeCollectionRate.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <span
+                      className="text-sm font-mono font-medium"
+                      style={{ color: getScoreColor(community.complaintResponseRate) }}
+                    >
+                      {community.complaintResponseRate.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <span
+                      className="text-sm font-mono font-medium"
+                      style={{ color: getScoreColor(community.satisfactionScore) }}
+                    >
+                      {community.satisfactionScore.toFixed(1)}分
+                    </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <span
+                      className="text-sm font-mono font-medium"
+                      style={{ color: getScoreColor(100 - community.equipmentFailureRate) }}
+                    >
+                      {community.equipmentFailureRate.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRowClick(community)
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md bg-navy-700 text-gray-400 hover:bg-cyber-500/20 hover:text-cyber-400 transition-colors opacity-0 group-hover/row:opacity-100"
+                    >
+                      查看详情
+                      <ChevronRight size={12} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {sortedCommunities.length === 0 && (
+          <div className="text-center py-12 text-gray-500 text-sm">
+            暂无社区数据
+          </div>
+        )}
       </div>
     </div>
   )

@@ -12,17 +12,26 @@ import {
   Building2,
 } from 'lucide-react'
 
+const ADMIN_ROLES = ['group_admin', 'regional_director'] as const
+
 const navItems = [
   { path: '/dashboard', icon: LayoutDashboard, label: '全国看板' },
   { path: '/alerts', icon: AlertTriangle, label: '预警中心' },
   { path: '/contracts', icon: FileText, label: '合同分析' },
   { path: '/reports', icon: BarChart3, label: '运营报告' },
-  { path: '/admin', icon: Shield, label: '权限管理' },
+  { path: '/admin', icon: Shield, label: '权限管理', adminOnly: true },
 ]
 
 export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar, currentUser, logout } = useAppStore()
   const navigate = useNavigate()
+
+  const visibleNavItems = navItems.filter((item) => {
+    if ('adminOnly' in item && item.adminOnly) {
+      return currentUser && ADMIN_ROLES.includes(currentUser.role as typeof ADMIN_ROLES[number])
+    }
+    return true
+  })
 
   return (
     <aside
@@ -43,7 +52,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}

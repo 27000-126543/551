@@ -46,6 +46,19 @@ const STATUS_BADGE: Record<Alert['status'], string> = {
 
 const STEP_LABELS = ['项目经理确认', '区域总监复核', '集团总裁批准']
 
+const STEP_ROLE_MAP: Record<number, 'project_manager' | 'regional_director' | 'group_admin'> = {
+  1: 'project_manager',
+  2: 'regional_director',
+  3: 'group_admin',
+}
+
+const ROLE_LABEL_MAP: Record<string, string> = {
+  project_manager: '项目经理',
+  regional_director: '区域总监',
+  group_admin: '集团总裁',
+  owner_committee: '业主委员会',
+}
+
 function getTypeBadge(type: Alert['type']) {
   return type === 'fee' ? 'badge-orange' : 'badge-red'
 }
@@ -55,9 +68,16 @@ function getTypeLabel(type: Alert['type']) {
 }
 
 export default function AlertCenter() {
+  const currentUser = useAppStore((s) => s.currentUser)
   const getFilteredAlerts = useAppStore((s) => s.getFilteredAlerts)
   const approveAlertStep = useAppStore((s) => s.approveAlertStep)
   const updateAlertStatus = useAppStore((s) => s.updateAlertStatus)
+
+  const canApproveStep = (stepNumber: number): boolean => {
+    if (!currentUser) return false
+    const requiredRole = STEP_ROLE_MAP[stepNumber]
+    return currentUser.role === requiredRole
+  }
 
   const [typeFilter, setTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -273,15 +293,24 @@ export default function AlertCenter() {
                                     <Clock className="w-3 h-3" />
                                     <span>待审批</span>
                                   </div>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleApprove(alert.id, idx + 1)
-                                    }}
-                                    className="btn-primary text-xs px-3 py-1.5"
-                                  >
-                                    审批
-                                  </button>
+                                  {canApproveStep(idx + 1) ? (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleApprove(alert.id, idx + 1)
+                                      }}
+                                      className="btn-primary text-xs px-3 py-1.5"
+                                    >
+                                      审批
+                                    </button>
+                                  ) : (
+                                    <div
+                                      className="text-xs text-gray-500 px-3 py-1.5 bg-navy-700 rounded-lg cursor-not-allowed"
+                                      title={`需${ROLE_LABEL_MAP[STEP_ROLE_MAP[idx + 1]]}账号审批`}
+                                    >
+                                      需{ROLE_LABEL_MAP[STEP_ROLE_MAP[idx + 1]]}账号审批
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
