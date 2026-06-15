@@ -9,6 +9,7 @@ interface AppState {
   selectedProvince: ProvinceName | '全国'
   selectedCommunity: Community | null
   sidebarCollapsed: boolean
+  contractHistory: Array<{ id: string; communityId: string; communityName: string; contractFileName: string; budgetFileName: string; analysis: unknown; dataSource: 'excel' | 'mock'; timestamp: string }>
 
   login: (userId: string) => void
   logout: () => void
@@ -17,6 +18,7 @@ interface AppState {
   toggleSidebar: () => void
   updateAlertStatus: (alertId: string, status: Alert['status']) => void
   approveAlertStep: (alertId: string, step: number, comment?: string) => void
+  addContractHistory: (record: Omit<{ id: string; communityId: string; communityName: string; contractFileName: string; budgetFileName: string; analysis: unknown; dataSource: 'excel' | 'mock'; timestamp: string }, 'id' | 'timestamp'> & { analysis: unknown }) => void
 
   getFilteredCommunities: () => Community[]
   getFilteredAlerts: () => Alert[]
