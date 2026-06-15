@@ -117,6 +117,273 @@ export default function Reports() {
     URL.revokeObjectURL(url)
   }, [report, weekRange])
 
+  const compareReports = useMemo(() => {
+    return selectedCompareIds
+      .map((id) => weeklyReports.find((r) => r.communityId === id))
+      .filter((r): r is WeeklyReport => !!r)
+  }, [selectedCompareIds])
+
+  const allComplaintTypes = useMemo(() => {
+    const types = new Set<string>()
+    for (const r of compareReports) {
+      for (const t of Object.keys(r.complaintTypeDistribution)) {
+        types.add(t)
+      }
+    }
+    return Array.from(types)
+  }, [compareReports])
+
+  const compareFeeBarOption = useMemo(() => {
+    if (compareReports.length === 0) return {}
+    return {
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: '#0F2B46',
+        borderColor: '#1B4272',
+        textStyle: { color: '#E0E7EF', fontSize: 12 },
+        formatter: (params: { name: string; value: number }[]) =>
+          `${params[0].name}<br/>${params.map((p) => `收缴率同比：${p.value >= 0 ? '+' : ''}${p.value}%`).join('<br/>')}`,
+      },
+      grid: { left: 60, right: 40, top: 30, bottom: 50 },
+      xAxis: {
+        type: 'category',
+        data: compareReports.map((r) => r.communityName),
+        axisLabel: { color: '#8899AA', fontSize: 11, rotate: 15 },
+        axisLine: { lineStyle: { color: '#1B4272' } },
+        axisTick: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        name: '同比(%)',
+        nameTextStyle: { color: '#8899AA', fontSize: 11 },
+        axisLabel: { color: '#8899AA', formatter: '{value}%' },
+        splitLine: { lineStyle: { color: '#1B4272', type: 'dashed' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      series: [
+        {
+          type: 'bar',
+          barWidth: 28,
+          data: compareReports.map((r) => ({
+            value: r.feeCollectionYoY,
+            itemStyle: {
+              color:
+                r.feeCollectionYoY >= 0
+                  ? {
+                      type: 'linear',
+                      x: 0, y: 0, x2: 0, y2: 1,
+                      colorStops: [
+                        { offset: 0, color: '#00D4AA' },
+                        { offset: 1, color: '#00D4AA44' },
+                      ],
+                    }
+                  : {
+                      type: 'linear',
+                      x: 0, y: 0, x2: 0, y2: 1,
+                      colorStops: [
+                        { offset: 0, color: '#FF4D4F' },
+                        { offset: 1, color: '#FF4D4F44' },
+                      ],
+                    },
+              borderRadius: [4, 4, 0, 0],
+            },
+          })),
+          label: {
+            show: true,
+            position: 'top',
+            color: '#8899AA',
+            fontSize: 10,
+            formatter: (p: { value: number }) => `${p.value >= 0 ? '+' : ''}${p.value.toFixed(1)}%`,
+          },
+        },
+      ],
+    }
+  }, [compareReports])
+
+  const compareComplaintBarOption = useMemo(() => {
+    if (compareReports.length === 0 || allComplaintTypes.length === 0) return {}
+    const colors = ['#00D4AA', '#33DDBB', '#FAAD14', '#FF7A45', '#FF4D4F', '#66E6CC']
+    return {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        backgroundColor: '#0F2B46',
+        borderColor: '#1B4272',
+        textStyle: { color: '#E0E7EF', fontSize: 12 },
+      },
+      legend: {
+        data: compareReports.map((r) => r.communityName),
+        textStyle: { color: '#8899AA', fontSize: 11 },
+        top: 0,
+        right: 0,
+      },
+      grid: { left: 60, right: 30, top: 50, bottom: 50 },
+      xAxis: {
+        type: 'category',
+        data: allComplaintTypes,
+        axisLabel: { color: '#8899AA', fontSize: 11 },
+        axisLine: { lineStyle: { color: '#1B4272' } },
+        axisTick: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        name: '件数',
+        nameTextStyle: { color: '#8899AA', fontSize: 11 },
+        axisLabel: { color: '#8899AA' },
+        splitLine: { lineStyle: { color: '#1B4272', type: 'dashed' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      series: compareReports.map((r, idx) => ({
+        name: r.communityName,
+        type: 'bar',
+        barGap: '10%',
+        data: allComplaintTypes.map((t) => r.complaintTypeDistribution[t] ?? 0),
+        itemStyle: {
+          color: colors[idx % colors.length],
+          borderRadius: [3, 3, 0, 0],
+        },
+      })),
+    }
+  }, [compareReports, allComplaintTypes])
+
+  const compareMaintenanceBarOption = useMemo(() => {
+    if (compareReports.length === 0) return {}
+    return {
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: '#0F2B46',
+        borderColor: '#1B4272',
+        textStyle: { color: '#E0E7EF', fontSize: 12 },
+      },
+      grid: { left: 60, right: 40, top: 30, bottom: 50 },
+      xAxis: {
+        type: 'category',
+        data: compareReports.map((r) => r.communityName),
+        axisLabel: { color: '#8899AA', fontSize: 11, rotate: 15 },
+        axisLine: { lineStyle: { color: '#1B4272' } },
+        axisTick: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        name: '小时',
+        nameTextStyle: { color: '#8899AA', fontSize: 11 },
+        axisLabel: { color: '#8899AA' },
+        splitLine: { lineStyle: { color: '#1B4272', type: 'dashed' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      series: [
+        {
+          type: 'bar',
+          barWidth: 28,
+          data: compareReports.map((r) => ({
+            value: r.avgMaintenanceResponseHours,
+            itemStyle: {
+              color:
+                r.avgMaintenanceResponseHours <= 24
+                  ? {
+                      type: 'linear',
+                      x: 0, y: 0, x2: 0, y2: 1,
+                      colorStops: [
+                        { offset: 0, color: '#00D4AA' },
+                        { offset: 1, color: '#00D4AA44' },
+                      ],
+                    }
+                  : {
+                      type: 'linear',
+                      x: 0, y: 0, x2: 0, y2: 1,
+                      colorStops: [
+                        { offset: 0, color: '#FF4D4F' },
+                        { offset: 1, color: '#FF4D4F44' },
+                      ],
+                    },
+              borderRadius: [4, 4, 0, 0],
+            },
+          })),
+          label: {
+            show: true,
+            position: 'top',
+            color: '#8899AA',
+            fontSize: 10,
+            formatter: (p: { value: number }) => `${p.value.toFixed(1)}h`,
+          },
+          markLine: {
+            silent: true,
+            symbol: 'none',
+            lineStyle: { color: '#FAAD14', type: 'dashed' },
+            data: [{ yAxis: 24, label: { formatter: '24h红线', color: '#FAAD14' } }],
+          },
+        },
+      ],
+    }
+  }, [compareReports])
+
+  const handleCompareExport = useCallback(() => {
+    if (compareReports.length === 0) return
+
+    let content = ''
+    content += '========================================\n'
+    content += '         多小区运营对比报告\n'
+    content += '========================================\n\n'
+    content += `导出日期：${new Date().toLocaleDateString('zh-CN')}\n`
+    content += `对比小区（${compareReports.length}个）：\n`
+    compareReports.forEach((r, i) => {
+      content += `  ${i + 1}. ${r.communityName}\n`
+    })
+    content += '\n'
+
+    content += '----------------------------------------\n'
+    content += '         1. 费用收缴率同比对比\n'
+    content += '----------------------------------------\n'
+    compareReports.forEach((r) => {
+      content += `${r.communityName}：${r.feeCollectionYoY >= 0 ? '+' : ''}${r.feeCollectionYoY.toFixed(1)}%\n`
+    })
+    content += '\n'
+
+    content += '----------------------------------------\n'
+    content += '         2. 投诉分布对比（件数）\n'
+    content += '----------------------------------------\n'
+    if (allComplaintTypes.length > 0) {
+      const header = ['小区名称', ...allComplaintTypes, '合计'].join('\t')
+      content += header + '\n'
+      compareReports.forEach((r) => {
+        const total = Object.values(r.complaintTypeDistribution).reduce((a, b) => a + b, 0)
+        const row = [
+          r.communityName,
+          ...allComplaintTypes.map((t) => String(r.complaintTypeDistribution[t] ?? 0)),
+          String(total),
+        ].join('\t')
+        content += row + '\n'
+      })
+    }
+    content += '\n'
+
+    content += '----------------------------------------\n'
+    content += '       3. 平均维修响应时长对比\n'
+    content += '----------------------------------------\n'
+    compareReports.forEach((r) => {
+      const flag = r.avgMaintenanceResponseHours <= 24 ? '[达标]' : '[超标]'
+      content += `${r.communityName}：${r.avgMaintenanceResponseHours.toFixed(1)} 小时 ${flag}\n`
+    })
+    content += '\n'
+
+    content += '========================================\n'
+    content += `报告生成时间：${new Date().toLocaleString('zh-CN')}\n`
+    content += '========================================\n'
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `多小区对比报告_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, [compareReports, allComplaintTypes])
+
   const feeTrendOption = useMemo(() => {
     if (!report) return {}
     const months = [
@@ -314,7 +581,7 @@ export default function Reports() {
     }
   }, [report])
 
-  if (!report || filteredCommunities.length === 0) {
+  if (filteredCommunities.length === 0) {
     return (
       <div className="min-h-screen bg-navy-900 p-6 flex items-center justify-center">
         <p className="text-gray-500">暂无报告数据</p>
@@ -324,191 +591,320 @@ export default function Reports() {
 
   return (
     <div className="min-h-screen bg-navy-900 p-6 space-y-6">
-      {/* Report Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <FileText size={24} className="text-cyber-400" />
-          <div>
-            <h1 className="text-xl font-bold text-gray-100">运营诊断周报</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{weekRange}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={selectedCommunityId}
-            onChange={(e) => {
-              setSelectedCommunityId(e.target.value)
-              const found = communities.find((c) => c.id === e.target.value)
-              if (found) setSelectedCommunity(found)
-            }}
-            className="bg-navy-800 border border-navy-600 rounded-lg px-4 py-2 text-sm text-gray-200 focus:border-cyber-500/50 focus:outline-none transition-colors min-w-[180px]"
+      {/* Tab Switcher */}
+      <div className="flex gap-1 p-1 bg-navy-800 rounded-lg w-fit">
+        {reportTabColors.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setReportTab(key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+              reportTab === key
+                ? 'bg-cyber-500/20 text-cyber-400 shadow-sm'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-navy-700/50'
+            }`}
           >
-            {filteredCommunities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-sm">
-            <Download size={14} />
-            导出报告
+            <Icon size={16} />
+            {label}
           </button>
-        </div>
+        ))}
       </div>
 
-      {/* Key Metrics Row */}
-      <div className="grid grid-cols-3 gap-5">
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 text-gray-400 text-sm">
-              <BarChart3 size={16} className="text-cyber-400" />
-              <span>费用收缴率同比</span>
-            </div>
-            <div
-              className={`flex items-center gap-1 text-xs font-medium ${
-                report.feeCollectionYoY >= 0 ? 'text-cyber-400' : 'text-alert-red'
-              }`}
-            >
-              {report.feeCollectionYoY >= 0 ? (
-                <TrendingUp size={14} />
-              ) : (
-                <TrendingDown size={14} />
-              )}
-              {report.feeCollectionYoY >= 0 ? '+' : ''}
-              {report.feeCollectionYoY.toFixed(1)}%
-            </div>
-          </div>
-          <span
-            className="metric-value"
-            style={{ color: report.feeCollectionYoY >= 0 ? '#00D4AA' : '#FF4D4F' }}
-          >
-            {report.feeCollectionYoY >= 0 ? '+' : ''}
-            {report.feeCollectionYoY.toFixed(1)}%
-          </span>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 text-gray-400 text-sm">
-              <BarChart3 size={16} className="text-alert-orange" />
-              <span>费用收缴率环比</span>
-            </div>
-            <div
-              className={`flex items-center gap-1 text-xs font-medium ${
-                report.feeCollectionMoM >= 0 ? 'text-cyber-400' : 'text-alert-red'
-              }`}
-            >
-              {report.feeCollectionMoM >= 0 ? (
-                <TrendingUp size={14} />
-              ) : (
-                <TrendingDown size={14} />
-              )}
-              {report.feeCollectionMoM >= 0 ? '+' : ''}
-              {report.feeCollectionMoM.toFixed(1)}%
-            </div>
-          </div>
-          <span
-            className="metric-value"
-            style={{ color: report.feeCollectionMoM >= 0 ? '#00D4AA' : '#FF4D4F' }}
-          >
-            {report.feeCollectionMoM >= 0 ? '+' : ''}
-            {report.feeCollectionMoM.toFixed(1)}%
-          </span>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 text-gray-400 text-sm">
-              <Clock size={16} className="text-alert-orange" />
-              <span>平均维修响应时长</span>
-            </div>
-            <div
-              className={`flex items-center gap-1 text-xs font-medium ${
-                report.avgMaintenanceResponseHours <= 24 ? 'text-cyber-400' : 'text-alert-red'
-              }`}
-            >
-              {report.avgMaintenanceResponseHours <= 24 ? (
-                <TrendingDown size={14} />
-              ) : (
-                <TrendingUp size={14} />
-              )}
-              {report.avgMaintenanceResponseHours <= 24 ? '达标' : '超标'}
-            </div>
-          </div>
-          <span
-            className="metric-value"
-            style={{
-              color: report.avgMaintenanceResponseHours <= 24 ? '#00D4AA' : '#FF4D4F',
-            }}
-          >
-            {report.avgMaintenanceResponseHours.toFixed(1)}
-          </span>
-          <span className="text-gray-500 text-sm ml-1">小时</span>
-        </div>
-      </div>
-
-      {/* Charts Row 1: Fee Trend + Complaint Distribution */}
-      <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-7 card">
-          <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-2">
-            <BarChart3 size={16} className="text-cyber-400" />
-            费用收缴趋势
-          </h3>
-          <ReactECharts
-            option={feeTrendOption}
-            style={{ height: '300px' }}
-            opts={{ renderer: 'canvas' }}
-          />
-        </div>
-
-        <div className="col-span-5 card">
-          <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-2">
-            <BarChart3 size={16} className="text-alert-orange" />
-            投诉类型分布
-          </h3>
-          <ReactECharts
-            option={complaintPieOption}
-            style={{ height: '300px' }}
-            opts={{ renderer: 'canvas' }}
-          />
-        </div>
-      </div>
-
-      {/* Charts Row 2: Maintenance Response Time */}
-      <div className="card">
-        <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-2">
-          <Clock size={16} className="text-cyber-400" />
-          维修响应时长（按设备类型）
-        </h3>
-        <ReactECharts
-          option={maintenanceBarOption}
-          style={{ height: '280px' }}
-          opts={{ renderer: 'canvas' }}
-        />
-      </div>
-
-      {/* Optimization Suggestions */}
-      <div className="card">
-        <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-4">
-          <Lightbulb size={16} className="text-alert-orange" />
-          优化建议
-        </h3>
-        <div className="space-y-3">
-          {report.suggestions.map((suggestion, idx) => (
-            <div
-              key={idx}
-              className="flex items-start gap-3 rounded-lg px-4 py-3 bg-navy-900/50 border border-navy-600/50"
-            >
-              <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-alert-orange/15 flex items-center justify-center">
-                <Lightbulb size={12} className="text-alert-orange" />
+      {/* Single Report Tab */}
+      {reportTab === 'single' && (
+        <>
+          {/* Report Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <FileText size={24} className="text-cyber-400" />
+              <div>
+                <h1 className="text-xl font-bold text-gray-100">运营诊断周报</h1>
+                <p className="text-sm text-gray-500 mt-0.5">{weekRange}</p>
               </div>
-              <p className="text-sm text-gray-300 leading-relaxed">
-                {highlightNumbers(suggestion)}
-              </p>
             </div>
-          ))}
+            <div className="flex items-center gap-3">
+              <select
+                value={selectedCommunityId}
+                onChange={(e) => {
+                  setSelectedCommunityId(e.target.value)
+                  const found = communities.find((c) => c.id === e.target.value)
+                  if (found) setSelectedCommunity(found)
+                }}
+                className="bg-navy-800 border border-navy-600 rounded-lg px-4 py-2 text-sm text-gray-200 focus:border-cyber-500/50 focus:outline-none transition-colors min-w-[180px]"
+              >
+                {filteredCommunities.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-sm">
+                <Download size={14} />
+                导出报告
+              </button>
+            </div>
+          </div>
+
+          {/* Key Metrics Row */}
+          <div className="grid grid-cols-3 gap-5">
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-gray-400 text-sm">
+                  <BarChart3 size={16} className="text-cyber-400" />
+                  <span>费用收缴率同比</span>
+                </div>
+                <div
+                  className={`flex items-center gap-1 text-xs font-medium ${
+                    report.feeCollectionYoY >= 0 ? 'text-cyber-400' : 'text-alert-red'
+                  }`}
+                >
+                  {report.feeCollectionYoY >= 0 ? (
+                    <TrendingUp size={14} />
+                  ) : (
+                    <TrendingDown size={14} />
+                  )}
+                  {report.feeCollectionYoY >= 0 ? '+' : ''}
+                  {report.feeCollectionYoY.toFixed(1)}%
+                </div>
+              </div>
+              <span
+                className="metric-value"
+                style={{ color: report.feeCollectionYoY >= 0 ? '#00D4AA' : '#FF4D4F' }}
+              >
+                {report.feeCollectionYoY >= 0 ? '+' : ''}
+                {report.feeCollectionYoY.toFixed(1)}%
+              </span>
+            </div>
+
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-gray-400 text-sm">
+                  <BarChart3 size={16} className="text-alert-orange" />
+                  <span>费用收缴率环比</span>
+                </div>
+                <div
+                  className={`flex items-center gap-1 text-xs font-medium ${
+                    report.feeCollectionMoM >= 0 ? 'text-cyber-400' : 'text-alert-red'
+                  }`}
+                >
+                  {report.feeCollectionMoM >= 0 ? (
+                    <TrendingUp size={14} />
+                  ) : (
+                    <TrendingDown size={14} />
+                  )}
+                  {report.feeCollectionMoM >= 0 ? '+' : ''}
+                  {report.feeCollectionMoM.toFixed(1)}%
+                </div>
+              </div>
+              <span
+                className="metric-value"
+                style={{ color: report.feeCollectionMoM >= 0 ? '#00D4AA' : '#FF4D4F' }}
+              >
+                {report.feeCollectionMoM >= 0 ? '+' : ''}
+                {report.feeCollectionMoM.toFixed(1)}%
+              </span>
+            </div>
+
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-gray-400 text-sm">
+                  <Clock size={16} className="text-alert-orange" />
+                  <span>平均维修响应时长</span>
+                </div>
+                <div
+                  className={`flex items-center gap-1 text-xs font-medium ${
+                    report.avgMaintenanceResponseHours <= 24 ? 'text-cyber-400' : 'text-alert-red'
+                  }`}
+                >
+                  {report.avgMaintenanceResponseHours <= 24 ? (
+                    <TrendingDown size={14} />
+                  ) : (
+                    <TrendingUp size={14} />
+                  )}
+                  {report.avgMaintenanceResponseHours <= 24 ? '达标' : '超标'}
+                </div>
+              </div>
+              <span
+                className="metric-value"
+                style={{
+                  color: report.avgMaintenanceResponseHours <= 24 ? '#00D4AA' : '#FF4D4F',
+                }}
+              >
+                {report.avgMaintenanceResponseHours.toFixed(1)}
+              </span>
+              <span className="text-gray-500 text-sm ml-1">小时</span>
+            </div>
+          </div>
+
+          {/* Charts Row 1: Fee Trend + Complaint Distribution */}
+          <div className="grid grid-cols-12 gap-5">
+            <div className="col-span-7 card">
+              <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-2">
+                <BarChart3 size={16} className="text-cyber-400" />
+                费用收缴趋势
+              </h3>
+              <ReactECharts
+                option={feeTrendOption}
+                style={{ height: '300px' }}
+                opts={{ renderer: 'canvas' }}
+              />
+            </div>
+
+            <div className="col-span-5 card">
+              <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-2">
+                <BarChart3 size={16} className="text-alert-orange" />
+                投诉类型分布
+              </h3>
+              <ReactECharts
+                option={complaintPieOption}
+                style={{ height: '300px' }}
+                opts={{ renderer: 'canvas' }}
+              />
+            </div>
+          </div>
+
+          {/* Charts Row 2: Maintenance Response Time */}
+          <div className="card">
+            <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-2">
+              <Clock size={16} className="text-cyber-400" />
+              维修响应时长（按设备类型）
+            </h3>
+            <ReactECharts
+              option={maintenanceBarOption}
+              style={{ height: '280px' }}
+              opts={{ renderer: 'canvas' }}
+            />
+          </div>
+
+          {/* Optimization Suggestions */}
+          <div className="card">
+            <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-4">
+              <Lightbulb size={16} className="text-alert-orange" />
+              优化建议
+            </h3>
+            <div className="space-y-3">
+              {report.suggestions.map((suggestion, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-3 rounded-lg px-4 py-3 bg-navy-900/50 border border-navy-600/50"
+                >
+                  <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-alert-orange/15 flex items-center justify-center">
+                    <Lightbulb size={12} className="text-alert-orange" />
+                  </div>
+                  <p className="text-sm text-gray-300 leading-relaxed">
+                    {highlightNumbers(suggestion)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Compare Tab */}
+      {reportTab === 'compare' && (
+        <div className="space-y-6">
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2">
+                <GitCompare size={16} className="text-cyber-400" />
+                选择对比小区（最多5个）
+              </h3>
+              <button
+                onClick={handleCompareExport}
+                disabled={compareReports.length === 0}
+                className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download size={14} />
+                导出对比报告
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-[200px] overflow-y-auto pr-2">
+              {filteredCommunities.map((c) => {
+                const checked = selectedCompareIds.includes(c.id)
+                const maxReached = selectedCompareIds.length >= 5
+                return (
+                  <label
+                    key={c.id}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all text-xs ${
+                      checked
+                        ? 'bg-cyber-500/10 border-cyber-500/40 text-cyber-300'
+                        : maxReached
+                        ? 'bg-navy-800/50 border-navy-700 text-gray-600 cursor-not-allowed'
+                        : 'bg-navy-800 border-navy-700 text-gray-300 hover:border-navy-600'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!checked && maxReached}
+                      onChange={() => {
+                        if (checked) {
+                          setSelectedCompareIds((prev) => prev.filter((id) => id !== c.id))
+                        } else if (!maxReached) {
+                          setSelectedCompareIds((prev) => [...prev, c.id])
+                        }
+                      }}
+                      className="w-3.5 h-3.5 rounded bg-navy-700 border-navy-600 text-cyber-500 focus:ring-cyber-500/30 focus:ring-2"
+                    />
+                    <span className="truncate">{c.name}</span>
+                  </label>
+                )
+              })}
+            </div>
+
+            <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+              <span>已选择</span>
+              <span className="text-cyber-400 font-medium">{selectedCompareIds.length}</span>
+              <span>/ 5 个小区</span>
+            </div>
+          </div>
+
+          {compareReports.length === 0 ? (
+            <div className="card flex items-center justify-center py-16">
+              <p className="text-gray-500 text-sm">请选择至少1个小区进行对比</p>
+            </div>
+          ) : (
+            <>
+              <div className="card">
+                <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-2">
+                  <BarChart3 size={16} className="text-cyber-400" />
+                  费用收缴率同比对比
+                </h3>
+                <ReactECharts
+                  option={compareFeeBarOption}
+                  style={{ height: '300px' }}
+                  opts={{ renderer: 'canvas' }}
+                />
+              </div>
+
+              <div className="card">
+                <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-2">
+                  <BarChart3 size={16} className="text-alert-orange" />
+                  投诉分布对比
+                </h3>
+                <ReactECharts
+                  option={compareComplaintBarOption}
+                  style={{ height: '320px' }}
+                  opts={{ renderer: 'canvas' }}
+                />
+              </div>
+
+              <div className="card">
+                <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-2">
+                  <Clock size={16} className="text-cyber-400" />
+                  维修响应时长对比
+                </h3>
+                <ReactECharts
+                  option={compareMaintenanceBarOption}
+                  style={{ height: '300px' }}
+                  opts={{ renderer: 'canvas' }}
+                />
+              </div>
+            </>
+          )}
         </div>
-      </div>
+      )}
     </div>
   )
 }
