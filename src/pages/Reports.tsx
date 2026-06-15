@@ -303,7 +303,7 @@ export default function Reports() {
     }
   }, [report])
 
-  if (!report) {
+  if (!report || filteredCommunities.length === 0) {
     return (
       <div className="min-h-screen bg-navy-900 p-6 flex items-center justify-center">
         <p className="text-gray-500">暂无报告数据</p>

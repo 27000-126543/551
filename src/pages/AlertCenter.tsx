@@ -83,6 +83,7 @@ export default function AlertCenter() {
   const [statusFilter, setStatusFilter] = useState('')
   const [searchText, setSearchText] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({})
 
   const baseAlerts = getFilteredAlerts()
 
@@ -113,8 +114,13 @@ export default function AlertCenter() {
     setExpandedId((prev) => (prev === id ? null : id))
   }
 
-  const handleApprove = (alertId: string, step: number) => {
-    approveAlertStep(alertId, step)
+  const handleApprove = (alertId: string, step: number, comment: string) => {
+    approveAlertStep(alertId, step, comment)
+    setCommentInputs((prev) => {
+      const next = { ...prev }
+      delete next[`${alertId}-${step}`]
+      return next
+    })
     if (step === 3) {
       updateAlertStatus(alertId, 'resolved')
     }
@@ -267,13 +273,18 @@ export default function AlertCenter() {
 
                             <div className="ml-[18px] mt-2 pl-5 border-l-2 border-navy-600 min-h-[40px]">
                               {stepStatus === 'approved' && (
-                                <div className="flex items-center gap-1 text-xs text-cyber-400 mb-1">
-                                  <CheckCircle className="w-3 h-3" />
-                                  <span>已通过</span>
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1 text-xs text-cyber-400">
+                                    <CheckCircle className="w-3 h-3" />
+                                    <span>已通过</span>
+                                  </div>
+                                  {approval?.timestamp && (
+                                    <p className="text-xs text-gray-500">{approval.timestamp}</p>
+                                  )}
+                                  {approval?.comment && (
+                                    <p className="text-xs text-gray-400">处理意见: {approval.comment}</p>
+                                  )}
                                 </div>
-                              )}
-                              {stepStatus === 'approved' && approval?.timestamp && (
-                                <p className="text-xs text-gray-500">{approval.timestamp}</p>
                               )}
                               {stepStatus === 'rejected' && (
                                 <div className="flex items-center gap-1 text-xs text-alert-red">
@@ -294,15 +305,31 @@ export default function AlertCenter() {
                                     <span>待审批</span>
                                   </div>
                                   {canApproveStep(idx + 1) ? (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleApprove(alert.id, idx + 1)
-                                      }}
-                                      className="btn-primary text-xs px-3 py-1.5"
-                                    >
-                                      审批
-                                    </button>
+                                    <>
+                                      <textarea
+                                        value={commentInputs[`${alert.id}-${idx + 1}`] || ''}
+                                        onChange={(e) =>
+                                          setCommentInputs((prev) => ({
+                                            ...prev,
+                                            [`${alert.id}-${idx + 1}`]: e.target.value,
+                                          }))
+                                        }
+                                        placeholder="请输入审批意见..."
+                                        className="input-dark w-full text-xs resize-none"
+                                        rows={2}
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          const comment = commentInputs[`${alert.id}-${idx + 1}`] || ''
+                                          handleApprove(alert.id, idx + 1, comment)
+                                        }}
+                                        className="btn-primary text-xs px-3 py-1.5"
+                                      >
+                                        审批
+                                      </button>
+                                    </>
                                   ) : (
                                     <div
                                       className="text-xs text-gray-500 px-3 py-1.5 bg-navy-700 rounded-lg cursor-not-allowed"

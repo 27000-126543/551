@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -50,6 +50,26 @@ export default function Dashboard() {
   const communities = getFilteredCommunities()
   const alerts = getFilteredAlerts()
   const provinceStats = getProvinceStats()
+
+  const allowedProvinces = useMemo(() => {
+    if (!currentUser || currentUser.role === 'group_admin') {
+      return [...PROVINCES]
+    }
+    if (currentUser.role === 'regional_director' && currentUser.region) {
+      return REGIONS[currentUser.region] ?? []
+    }
+    const communityList = getFilteredCommunities()
+    const provinceSet = new Set(communityList.map((c) => c.province))
+    return [...provinceSet]
+  }, [currentUser, getFilteredCommunities])
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'group_admin') return
+    if (selectedProvince === '全国') return
+    if (!allowedProvinces.includes(selectedProvince)) {
+      setSelectedProvince('全国')
+    }
+  }, [currentUser, selectedProvince, allowedProvinces, setSelectedProvince])
 
   const metrics = useMemo(() => {
     if (communities.length === 0) {
@@ -215,7 +235,7 @@ export default function Dashboard() {
             className="bg-navy-800 border border-navy-600 rounded-lg px-4 py-2 text-sm text-gray-200 focus:border-cyber-500/50 focus:outline-none transition-colors min-w-[120px]"
           >
             <option value="全国">全国</option>
-            {PROVINCES.map((p) => (
+            {allowedProvinces.map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>

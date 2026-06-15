@@ -8,6 +8,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Search,
+  Filter,
 } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { generateContractAnalysis } from '../data/mockData'
@@ -17,6 +18,108 @@ type UploadState = {
   file: File | null
   name: string
   parsed?: unknown[]
+}
+
+type HistoryRecord = {
+  id: string
+  communityId: string
+  communityName: string
+  budgetFileName: string
+  analysis: ContractAnalysisType
+  dataSource: 'excel' | 'mock'
+  timestamp: string
+}
+
+function HistoryFilter({ history, onView }: { history: HistoryRecord[]; onView: (record: HistoryRecord) => void }) {
+  const communityOptions = useMemo(() => {
+    const names = new Set(history.map((r) => r.communityName))
+    return Array.from(names)
+  }, [history])
+
+  const budgetOptions = useMemo(() => {
+    const names = new Set(history.map((r) => r.budgetFileName))
+    return Array.from(names)
+  }, [history])
+
+  const [filterCommunity, setFilterCommunity] = useState('')
+  const [filterBudget, setFilterBudget] = useState('')
+
+  const filtered = useMemo(() => {
+    return history.filter((r) => {
+      if (filterCommunity && r.communityName !== filterCommunity) return false
+      if (filterBudget && r.budgetFileName !== filterBudget) return false
+      return true
+    })
+  }, [history, filterCommunity, filterBudget])
+
+  return (
+    <>
+      <div className="flex items-center gap-3 mb-4">
+        <Filter size={14} className="text-gray-500" />
+        <select
+          value={filterCommunity}
+          onChange={(e) => setFilterCommunity(e.target.value)}
+          className="bg-navy-900 border border-navy-600 rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:border-cyber-500/50 focus:outline-none transition-colors min-w-[140px]"
+        >
+          <option value="">全部社区</option>
+          {communityOptions.map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
+        <select
+          value={filterBudget}
+          onChange={(e) => setFilterBudget(e.target.value)}
+          className="bg-navy-900 border border-navy-600 rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:border-cyber-500/50 focus:outline-none transition-colors min-w-[160px]"
+        >
+          <option value="">全部预算表</option>
+          {budgetOptions.map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-navy-600">
+              <th className="text-left text-gray-400 font-medium py-3 px-4">时间</th>
+              <th className="text-left text-gray-400 font-medium py-3 px-4">社区</th>
+              <th className="text-left text-gray-400 font-medium py-3 px-4">预算表文件</th>
+              <th className="text-center text-gray-400 font-medium py-3 px-4">数据来源</th>
+              <th className="text-center text-gray-400 font-medium py-3 px-4">异常项数</th>
+              <th className="text-center text-gray-400 font-medium py-3 px-4">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((record) => (
+              <tr key={record.id} className="border-b border-navy-700/50 hover:bg-navy-800/50 transition-colors">
+                <td className="py-3 px-4 text-gray-300 text-xs">{record.timestamp}</td>
+                <td className="py-3 px-4 text-gray-200">{record.communityName}</td>
+                <td className="py-3 px-4 text-gray-300">{record.budgetFileName}</td>
+                <td className="py-3 px-4 text-center">
+                  <span className={`text-xs px-2 py-0.5 rounded ${record.dataSource === 'excel' ? 'bg-cyber-500/10 text-cyber-400' : 'bg-alert-orange/10 text-alert-orange'}`}>
+                    {record.dataSource === 'excel' ? '已上传预算表' : '模拟数据'}
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-center font-mono">
+                  <span className={record.analysis.comparisons.filter(c => c.isAbnormal).length > 0 ? 'text-alert-red' : 'text-cyber-400'}>
+                    {record.analysis.comparisons.filter(c => c.isAbnormal).length}
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-center">
+                  <button
+                    onClick={() => onView(record)}
+                    className="px-3 py-1 text-xs rounded-md bg-navy-700 text-gray-400 hover:bg-cyber-500/20 hover:text-cyber-400 transition-colors"
+                  >
+                    查看
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
 }
 
 export default function ContractAnalysis() {
@@ -29,6 +132,16 @@ export default function ContractAnalysis() {
   const [analysis, setAnalysis] = useState<ContractAnalysisType | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [dataSource, setDataSource] = useState<'excel' | 'mock' | null>(null)
+
+  const [analysisHistory, setAnalysisHistory] = useState<Array<{
+    id: string
+    communityId: string
+    communityName: string
+    budgetFileName: string
+    analysis: ContractAnalysisType
+    dataSource: 'excel' | 'mock'
+    timestamp: string
+  }>>([])
 
   const contractInputRef = useRef<HTMLInputElement>(null)
   const budgetInputRef = useRef<HTMLInputElement>(null)
@@ -215,6 +328,16 @@ export default function ContractAnalysis() {
         comparisons,
       })
       setDataSource(usedExcelData ? 'excel' : 'mock')
+      const communityName = filteredCommunities.find(c => c.id === selectedCommunityId)?.name ?? ''
+      setAnalysisHistory(prev => [{
+        id: `h_${Date.now()}`,
+        communityId: selectedCommunityId,
+        communityName,
+        budgetFileName: budgetUpload.name,
+        analysis: { ...mockResult, comparisons },
+        dataSource: usedExcelData ? 'excel' : 'mock',
+        timestamp: new Date().toLocaleString('zh-CN')
+      }, ...prev])
       setIsAnalyzing(false)
     }, 800)
   }, [selectedCommunityId, budgetUpload.parsed, isButtonDisabled, extractActualValue])
@@ -530,6 +653,22 @@ export default function ContractAnalysis() {
             </div>
           )}
         </>
+      )}
+
+      {analysisHistory.length > 0 && (
+        <div className="card">
+          <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-4">
+            <FileText size={16} className="text-cyber-400" />
+            分析历史
+          </h3>
+          <HistoryFilter
+            history={analysisHistory}
+            onView={(record) => {
+              setAnalysis(record.analysis)
+              setDataSource(record.dataSource)
+            }}
+          />
+        </div>
       )}
     </div>
   )

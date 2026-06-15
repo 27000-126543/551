@@ -16,7 +16,7 @@ interface AppState {
   setSelectedCommunity: (community: Community | null) => void
   toggleSidebar: () => void
   updateAlertStatus: (alertId: string, status: Alert['status']) => void
-  approveAlertStep: (alertId: string, step: number) => void
+  approveAlertStep: (alertId: string, step: number, comment?: string) => void
 
   getFilteredCommunities: () => Community[]
   getFilteredAlerts: () => Alert[]
@@ -49,13 +49,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       alerts: s.alerts.map((a) => (a.id === alertId ? { ...a, status } : a)),
     })),
 
-  approveAlertStep: (alertId, step) =>
+  approveAlertStep: (alertId, step, comment) =>
     set((s) => ({
       alerts: s.alerts.map((a) => {
         if (a.id !== alertId) return a
         const approvals = a.approvals.map((apr) => {
           if (apr.step === step) {
-            return { ...apr, status: 'approved' as const, timestamp: new Date().toISOString().slice(0, 10), comment: '同意' }
+            return { ...apr, status: 'approved' as const, timestamp: new Date().toISOString().slice(0, 10), comment: comment || '同意' }
           }
           if (apr.step === step + 1 && apr.status === 'pending') {
             return apr
