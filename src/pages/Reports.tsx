@@ -8,6 +8,8 @@ import {
   Lightbulb,
   FileText,
   Download,
+  GitCompare,
+  FileClock,
 } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { weeklyReports } from '../data/mockData'
@@ -28,13 +30,22 @@ function highlightNumbers(text: string): React.ReactNode {
   })
 }
 
+type ReportTabKey = 'single' | 'compare'
+
+const reportTabColors = [
+  { key: 'single' as const, label: '单小区报告', icon: FileText },
+  { key: 'compare' as const, label: '多小区对比', icon: GitCompare },
+]
+
 export default function Reports() {
   const { communities, getFilteredCommunities, selectedCommunity, setSelectedCommunity, currentUser } = useAppStore()
   const filteredCommunities = getFilteredCommunities()
 
+  const [reportTab, setReportTab] = useState<ReportTabKey>('single')
   const [selectedCommunityId, setSelectedCommunityId] = useState<string>(
     selectedCommunity?.id ?? filteredCommunities[0]?.id ?? ''
   )
+  const [selectedCompareIds, setSelectedCompareIds] = useState<string[]>([])
 
   useEffect(() => {
     const isSelectedInFiltered = filteredCommunities.some((c) => c.id === selectedCommunityId)

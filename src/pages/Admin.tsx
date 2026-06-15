@@ -13,6 +13,7 @@ import {
   Plus,
   Search,
   Eye,
+  FileClock,
 } from 'lucide-react'
 
 const roleLabels: Record<string, string> = {
@@ -53,10 +54,22 @@ const roleDescriptions = [
   },
 ]
 
-type TabKey = 'org' | 'audit'
+type TabKey = 'org' | 'audit' | 'trail'
+
+const actionLabels: Record<string, string> = {
+  view_community: '查看小区',
+  export_report: '导出报告',
+  approve_alert: '审批预警',
+}
+
+const actionColors: Record<string, string> = {
+  view_community: '#22D3EE',
+  export_report: '#FB923C',
+  approve_alert: '#EF4444',
+}
 
 export default function Admin() {
-  const { communities, currentUser, getFilteredCommunities } = useAppStore()
+  const { communities, currentUser, getFilteredCommunities, auditLogs } = useAppStore()
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
   const [expandedGroup, setExpandedGroup] = useState(true)
   const [activeTab, setActiveTab] = useState<TabKey>('org')
@@ -66,6 +79,10 @@ export default function Admin() {
   const [fwdCommunitySearch, setFwdCommunitySearch] = useState('')
 
   const [revCommunityId, setRevCommunityId] = useState<string>('')
+
+  const [trailAction, setTrailAction] = useState<string>('all')
+  const [trailUser, setTrailUser] = useState<string>('all')
+  const [trailRegion, setTrailRegion] = useState<string>('all')
 
   const filteredCommunities = useMemo(() => getFilteredCommunities(), [getFilteredCommunities, currentUser])
 
@@ -88,11 +105,77 @@ export default function Admin() {
       list.push(c)
       regionCommMap.set(c.region, list)
     }
-    return Object.keys(REGIONS).map((region) => ({
-      region,
-      communities: regionCommMap.get(region) ?? [],
-    }))
+    return Object.keys(REGIONS)
+      .map((region) => ({
+        region,
+        communities: regionCommMap.get(region) ?? [],
+      }))
+      .filter((item) => item.communities.length > 0)
   }, [filteredCommunities])
+
+  const trailUserOptions = useMemo(() => {
+    if (!currentUser || currentUser.role === 'group_admin') return users
+    const filteredCommunityIds = filteredCommunities.map((c) => c.id)
+    return users.filter((user) => {
+      if (user.role === 'group_admin') return false
+      if (user.role === 'regional_director') {
+        return currentUser.role === 'regional_director' && user.region === currentUser.region
+      }
+      return user.communityIds.some((id) => filteredCommunityIds.includes(id))
+    })
+  }, [currentUser, filteredCommunities])
+
+  const trailRegionOptions = useMemo(() => {
+    if (!currentUser || currentUser.role === 'group_admin') {
+      return Object.keys(REGIONS)
+    }
+    if (currentUser.role === 'regional_director' && currentUser.region) {
+      return [currentUser.region]
+    }
+    const regions = filteredCommunities.map((c) => c.region)
+    return [...new Set(regions)]
+  }, [currentUser, filteredCommunities])
+
+  const filteredAuditLogs = useMemo(() => {
+    let logs = auditLogs
+
+    if (currentUser) {
+      const filteredCommunityIds = filteredCommunities.map((c) => c.id)
+      const userRegionMap = new Map<string, string | undefined>()
+      const userCommMap = new Map<string, string[]>()
+      for (const u of users) {
+        userRegionMap.set(u.id, u.region)
+        userCommMap.set(u.id, u.communityIds)
+      }
+
+      if (currentUser.role === 'regional_director') {
+        logs = logs.filter((log) => {
+          if (log.region === currentUser.region) return true
+          const logUserRegion = userRegionMap.get(log.userId)
+          if (logUserRegion === currentUser.region) return true
+          const logUserComms = userCommMap.get(log.userId) ?? []
+          return logUserComms.some((id) => filteredCommunityIds.includes(id))
+        })
+      } else if (currentUser.role === 'project_manager' || currentUser.role === 'owner_committee') {
+        logs = logs.filter((log) => {
+          const logUserComms = userCommMap.get(log.userId) ?? []
+          return logUserComms.some((id) => currentUser.communityIds.includes(id))
+        })
+      }
+    }
+
+    if (trailAction !== 'all') {
+      logs = logs.filter((log) => log.action === trailAction)
+    }
+    if (trailUser !== 'all') {
+      logs = logs.filter((log) => log.userId === trailUser)
+    }
+    if (trailRegion !== 'all') {
+      logs = logs.filter((log) => log.region === trailRegion)
+    }
+
+    return logs
+  }, [auditLogs, currentUser, filteredCommunities, trailAction, trailUser, trailRegion])
 
   const toggleRegion = (region: string) => {
     setExpandedRegions((prev) => {
@@ -245,6 +328,7 @@ export default function Admin() {
   const tabs: { key: TabKey; label: string; icon: typeof Shield }[] = [
     { key: 'org', label: '组织与用户', icon: Users },
     { key: 'audit', label: '权限审计', icon: Eye },
+    { key: 'trail', label: '审计留痕', icon: FileClock },
   ]
 
   return (
@@ -621,6 +705,130 @@ export default function Admin() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'trail' && (
+        <div className="card">
+          <h3 className="text-gray-200 font-medium text-sm mb-4 flex items-center gap-2">
+            <FileClock size={16} className="text-cyber-400" />
+            审计留痕 — 操作日志
+          </h3>
+
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <select
+              value={trailAction}
+              onChange={(e) => setTrailAction(e.target.value)}
+              className="bg-navy-700 border border-navy-600 text-gray-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-cyber-500/50"
+            >
+              <option value="all">全部操作</option>
+              <option value="view_community">查看小区</option>
+              <option value="export_report">导出报告</option>
+              <option value="approve_alert">审批预警</option>
+            </select>
+
+            <select
+              value={trailUser}
+              onChange={(e) => setTrailUser(e.target.value)}
+              className="bg-navy-700 border border-navy-600 text-gray-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-cyber-500/50"
+            >
+              <option value="all">全部用户</option>
+              {trailUserOptions.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={trailRegion}
+              onChange={(e) => setTrailRegion(e.target.value)}
+              className="bg-navy-700 border border-navy-600 text-gray-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-cyber-500/50"
+            >
+              <option value="all">全部区域</option>
+              {trailRegionOptions.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-navy-600">
+                <th className="text-left text-xs text-gray-500 font-medium pb-3">时间</th>
+                <th className="text-left text-xs text-gray-500 font-medium pb-3">用户</th>
+                <th className="text-left text-xs text-gray-500 font-medium pb-3">角色</th>
+                <th className="text-left text-xs text-gray-500 font-medium pb-3">操作类型</th>
+                <th className="text-left text-xs text-gray-500 font-medium pb-3">目标名称</th>
+                <th className="text-left text-xs text-gray-500 font-medium pb-3">区域</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAuditLogs.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-gray-500 text-xs">
+                    暂无审计日志
+                  </td>
+                </tr>
+              )}
+              {filteredAuditLogs.map((log) => {
+                const logUser = users.find((u) => u.id === log.userId)
+                return (
+                  <tr
+                    key={log.id}
+                    className="border-b border-navy-600/50 hover:bg-navy-700/20 transition-colors"
+                  >
+                    <td className="py-3">
+                      <span className="text-xs text-gray-400">{log.timestamp}</span>
+                    </td>
+                    <td className="py-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-navy-600 flex items-center justify-center text-xs font-bold text-cyber-400">
+                          {log.userName[0]}
+                        </div>
+                        <span className="text-sm text-gray-200">{log.userName}</span>
+                      </div>
+                    </td>
+                    <td className="py-3">
+                      {logUser && (
+                        <span
+                          className="badge-cyber"
+                          style={{
+                            background: `${
+                              roleDescriptions.find((r) => r.role === logUser.role)?.color ?? '#666'
+                            }15`,
+                            color:
+                              roleDescriptions.find((r) => r.role === logUser.role)?.color ?? '#666',
+                          }}
+                        >
+                          {roleLabels[logUser.role]}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3">
+                      <span
+                        className="badge-cyber"
+                        style={{
+                          background: `${actionColors[log.action]}18`,
+                          color: actionColors[log.action],
+                        }}
+                      >
+                        {actionLabels[log.action]}
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      <span className="text-xs text-gray-300">{log.targetName}</span>
+                    </td>
+                    <td className="py-3">
+                      <span className="text-xs text-gray-500">{log.region || '-'}</span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

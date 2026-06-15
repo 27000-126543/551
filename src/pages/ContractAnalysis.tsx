@@ -13,6 +13,7 @@ import {
 import { useAppStore } from '../store/useAppStore'
 import { generateContractAnalysis } from '../data/mockData'
 import type { ContractAnalysis as ContractAnalysisType, StandardComparison } from '../types'
+import { ArrowLeft } from 'lucide-react'
 
 type UploadState = {
   file: File | null
@@ -24,10 +25,21 @@ type HistoryRecord = {
   id: string
   communityId: string
   communityName: string
+  contractFileName: string
   budgetFileName: string
   analysis: ContractAnalysisType
   dataSource: 'excel' | 'mock'
   timestamp: string
+}
+
+type TimeFilter = 'all' | '7days' | '30days'
+
+function isWithinDays(timestamp: string, days: number): boolean {
+  const date = new Date(timestamp.replace(/\//g, '-'))
+  if (isNaN(date.getTime())) return true
+  const now = new Date()
+  const diff = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+  return diff <= days
 }
 
 function HistoryFilter({ history, onView }: { history: HistoryRecord[]; onView: (record: HistoryRecord) => void }) {
@@ -43,19 +55,31 @@ function HistoryFilter({ history, onView }: { history: HistoryRecord[]; onView: 
 
   const [filterCommunity, setFilterCommunity] = useState('')
   const [filterBudget, setFilterBudget] = useState('')
+  const [filterTime, setFilterTime] = useState<TimeFilter>('all')
 
   const filtered = useMemo(() => {
     return history.filter((r) => {
       if (filterCommunity && r.communityName !== filterCommunity) return false
       if (filterBudget && r.budgetFileName !== filterBudget) return false
+      if (filterTime === '7days' && !isWithinDays(r.timestamp, 7)) return false
+      if (filterTime === '30days' && !isWithinDays(r.timestamp, 30)) return false
       return true
     })
-  }, [history, filterCommunity, filterBudget])
+  }, [history, filterCommunity, filterBudget, filterTime])
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <Filter size={14} className="text-gray-500" />
+        <select
+          value={filterTime}
+          onChange={(e) => setFilterTime(e.target.value as TimeFilter)}
+          className="bg-navy-900 border border-navy-600 rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:border-cyber-500/50 focus:outline-none transition-colors min-w-[120px]"
+        >
+          <option value="all">全部时间</option>
+          <option value="7days">近7天</option>
+          <option value="30days">近30天</option>
+        </select>
         <select
           value={filterCommunity}
           onChange={(e) => setFilterCommunity(e.target.value)}
@@ -83,6 +107,7 @@ function HistoryFilter({ history, onView }: { history: HistoryRecord[]; onView: 
             <tr className="border-b border-navy-600">
               <th className="text-left text-gray-400 font-medium py-3 px-4">时间</th>
               <th className="text-left text-gray-400 font-medium py-3 px-4">社区</th>
+              <th className="text-left text-gray-400 font-medium py-3 px-4">合同文件</th>
               <th className="text-left text-gray-400 font-medium py-3 px-4">预算表文件</th>
               <th className="text-center text-gray-400 font-medium py-3 px-4">数据来源</th>
               <th className="text-center text-gray-400 font-medium py-3 px-4">异常项数</th>
@@ -94,6 +119,7 @@ function HistoryFilter({ history, onView }: { history: HistoryRecord[]; onView: 
               <tr key={record.id} className="border-b border-navy-700/50 hover:bg-navy-800/50 transition-colors">
                 <td className="py-3 px-4 text-gray-300 text-xs">{record.timestamp}</td>
                 <td className="py-3 px-4 text-gray-200">{record.communityName}</td>
+                <td className="py-3 px-4 text-gray-300 text-xs">{record.contractFileName}</td>
                 <td className="py-3 px-4 text-gray-300">{record.budgetFileName}</td>
                 <td className="py-3 px-4 text-center">
                   <span className={`text-xs px-2 py-0.5 rounded ${record.dataSource === 'excel' ? 'bg-cyber-500/10 text-cyber-400' : 'bg-alert-orange/10 text-alert-orange'}`}>
@@ -123,7 +149,7 @@ function HistoryFilter({ history, onView }: { history: HistoryRecord[]; onView: 
 }
 
 export default function ContractAnalysis() {
-  const { getFilteredCommunities } = useAppStore()
+  const { getFilteredCommunities, contractHistory, addContractHistory } = useAppStore()
   const filteredCommunities = getFilteredCommunities()
 
   const [contractUpload, setContractUpload] = useState<UploadState>({ file: null, name: '' })
@@ -132,16 +158,7 @@ export default function ContractAnalysis() {
   const [analysis, setAnalysis] = useState<ContractAnalysisType | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [dataSource, setDataSource] = useState<'excel' | 'mock' | null>(null)
-
-  const [analysisHistory, setAnalysisHistory] = useState<Array<{
-    id: string
-    communityId: string
-    communityName: string
-    budgetFileName: string
-    analysis: ContractAnalysisType
-    dataSource: 'excel' | 'mock'
-    timestamp: string
-  }>>([])
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
 
   const contractInputRef = useRef<HTMLInputElement>(null)
   const budgetInputRef = useRef<HTMLInputElement>(null)
@@ -323,24 +340,22 @@ export default function ContractAnalysis() {
         }
       })
 
-      setAnalysis({
-        ...mockResult,
-        comparisons,
-      })
+      const finalAnalysis = { ...mockResult, comparisons }
+      setAnalysis(finalAnalysis)
       setDataSource(usedExcelData ? 'excel' : 'mock')
       const communityName = filteredCommunities.find(c => c.id === selectedCommunityId)?.name ?? ''
-      setAnalysisHistory(prev => [{
-        id: `h_${Date.now()}`,
+      addContractHistory({
         communityId: selectedCommunityId,
         communityName,
+        contractFileName: contractUpload.name,
         budgetFileName: budgetUpload.name,
-        analysis: { ...mockResult, comparisons },
+        analysis: finalAnalysis,
         dataSource: usedExcelData ? 'excel' : 'mock',
-        timestamp: new Date().toLocaleString('zh-CN')
-      }, ...prev])
+      })
+      setSelectedHistoryId(null)
       setIsAnalyzing(false)
     }, 800)
-  }, [selectedCommunityId, budgetUpload.parsed, isButtonDisabled, extractActualValue])
+  }, [selectedCommunityId, budgetUpload.parsed, isButtonDisabled, extractActualValue, contractUpload.name, budgetUpload.name, filteredCommunities, addContractHistory])
 
   const summaryStats = useMemo(() => {
     if (!analysis) return null
@@ -424,6 +439,17 @@ export default function ContractAnalysis() {
       ],
     }
   }, [analysis])
+
+  const selectedHistoryRecord = useMemo(() => {
+    if (!selectedHistoryId) return null
+    return contractHistory.find((r) => r.id === selectedHistoryId) as HistoryRecord | undefined
+  }, [selectedHistoryId, contractHistory])
+
+  function handleReturnToLive() {
+    setSelectedHistoryId(null)
+    setAnalysis(null)
+    setDataSource(null)
+  }
 
   function getRowStyle(c: StandardComparison) {
     if (c.isAbnormal) return 'bg-alert-red/5 border-l-2 border-alert-red'
@@ -581,10 +607,60 @@ export default function ContractAnalysis() {
       {/* Analysis Result */}
       {analysis && summaryStats && (
         <>
+          {/* History Detail Info Card */}
+          {selectedHistoryRecord && (
+            <div className="card border-2 border-cyber-500/40">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-1 text-xs rounded bg-cyber-500/20 text-cyber-400 flex items-center gap-1">
+                    <AlertTriangle size={12} />
+                    历史记录查看模式
+                  </span>
+                </div>
+                <button
+                  onClick={handleReturnToLive}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-navy-700 text-gray-300 hover:bg-cyber-500/20 hover:text-cyber-400 transition-colors"
+                >
+                  <ArrowLeft size={14} />
+                  返回实时分析
+                </button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">📄 合同文件名</div>
+                  <div className="text-sm text-gray-200 truncate" title={selectedHistoryRecord.contractFileName}>
+                    {selectedHistoryRecord.contractFileName}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">📊 预算表文件名</div>
+                  <div className="text-sm text-gray-200 truncate" title={selectedHistoryRecord.budgetFileName}>
+                    {selectedHistoryRecord.budgetFileName}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">🏢 社区</div>
+                  <div className="text-sm text-gray-200">{selectedHistoryRecord.communityName}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">⏰ 分析时间</div>
+                  <div className="text-sm text-gray-200">{selectedHistoryRecord.timestamp}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Data Source */}
-          <div className={`text-sm px-4 py-2 rounded-lg ${dataSource === 'excel' ? 'bg-cyber-500/10 text-cyber-400' : 'bg-alert-orange/10 text-alert-orange'}`}>
-            数据来源：{dataSource === 'excel' ? '已上传预算表' : '模拟数据'}
-            {dataSource === 'mock' && <span className="ml-2 text-xs text-gray-500">（未找到匹配的Excel数据列，已使用默认数据）</span>}
+          <div className={`text-sm px-4 py-2 rounded-lg flex items-center justify-between ${dataSource === 'excel' ? 'bg-cyber-500/10 text-cyber-400' : 'bg-alert-orange/10 text-alert-orange'}`}>
+            <span>
+              数据来源：{dataSource === 'excel' ? '已上传预算表' : '模拟数据'}
+              {dataSource === 'mock' && <span className="ml-2 text-xs text-gray-500">（未找到匹配的Excel数据列，已使用默认数据）</span>}
+            </span>
+            {selectedHistoryRecord && (
+              <span className="text-xs text-gray-400">
+                (历史记录快照)
+              </span>
+            )}
           </div>
 
           {/* Summary Stats */}
@@ -655,15 +731,17 @@ export default function ContractAnalysis() {
         </>
       )}
 
-      {analysisHistory.length > 0 && (
+      {contractHistory.length > 0 && (
         <div className="card">
           <h3 className="text-gray-200 font-medium text-sm flex items-center gap-2 mb-4">
             <FileText size={16} className="text-cyber-400" />
             分析历史
           </h3>
           <HistoryFilter
-            history={analysisHistory}
+            history={contractHistory as HistoryRecord[]}
             onView={(record) => {
+              setSelectedHistoryId(record.id)
+              setSelectedCommunityId(record.communityId)
               setAnalysis(record.analysis)
               setDataSource(record.dataSource)
             }}
