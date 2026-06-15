@@ -38,6 +38,8 @@ export default function ContractAnalysis() {
 
   const handleContractFile = useCallback((file: File) => {
     if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      setAnalysis(null)
+      setDataSource(null)
       setContractUpload({ file, name: file.name })
     }
   }, [])
@@ -54,6 +56,8 @@ export default function ContractAnalysis() {
         const workbook = XLSX.read(data, { type: 'array' })
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
         const jsonData = XLSX.utils.sheet_to_json(firstSheet)
+        setAnalysis(null)
+        setDataSource(null)
         setBudgetUpload({ file, name: file.name, parsed: jsonData })
       }
       reader.readAsArrayBuffer(file)
@@ -134,7 +138,7 @@ export default function ContractAnalysis() {
         }
       }
 
-      if (!actualValue) {
+      if (actualValue === null || actualValue === undefined) {
         for (const key of Object.keys(rowData)) {
           const value = rowData[key]
           if (typeof value === 'number') {
@@ -149,7 +153,7 @@ export default function ContractAnalysis() {
         }
       }
 
-      if (categoryMatch && actualValue !== null) {
+      if (categoryMatch && actualValue !== null && actualValue !== undefined) {
         return actualValue
       }
     }
@@ -185,7 +189,7 @@ export default function ContractAnalysis() {
         let deviation: number
         let isAbnormal: boolean
 
-        if (actualValue !== null) {
+        if (actualValue !== null && actualValue !== undefined) {
           usedExcelData = true
           finalActualValue = actualValue
           deviation = Math.round(Math.abs((actualValue - standardValue) / standardValue * 100) * 100) / 100
@@ -419,7 +423,11 @@ export default function ContractAnalysis() {
         <label className="text-sm text-gray-400 whitespace-nowrap">选择社区</label>
         <select
           value={selectedCommunityId}
-          onChange={(e) => setSelectedCommunityId(e.target.value)}
+          onChange={(e) => {
+            setSelectedCommunityId(e.target.value)
+            setAnalysis(null)
+            setDataSource(null)
+          }}
           className="bg-navy-900 border border-navy-600 rounded-lg px-4 py-2 text-sm text-gray-200 focus:border-cyber-500/50 focus:outline-none transition-colors min-w-[200px]"
         >
           <option value="">-- 请选择社区 --</option>

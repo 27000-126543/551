@@ -52,13 +52,27 @@ const roleDescriptions = [
 ]
 
 export default function Admin() {
-  const { communities } = useAppStore()
+  const { communities, currentUser, getFilteredCommunities } = useAppStore()
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
   const [expandedGroup, setExpandedGroup] = useState(true)
 
+  const filteredCommunities = useMemo(() => getFilteredCommunities(), [getFilteredCommunities, currentUser])
+
+  const filteredUsers = useMemo(() => {
+    if (!currentUser || currentUser.role === 'group_admin') return users
+    const filteredCommunityIds = filteredCommunities.map((c) => c.id)
+    return users.filter((user) => {
+      if (user.role === 'group_admin') return false
+      if (user.role === 'regional_director') {
+        return currentUser.role === 'regional_director' && user.region === currentUser.region
+      }
+      return user.communityIds.some((id) => filteredCommunityIds.includes(id))
+    })
+  }, [currentUser, filteredCommunities])
+
   const treeData = useMemo(() => {
-    const regionCommMap = new Map<string, typeof communities>()
-    for (const c of communities) {
+    const regionCommMap = new Map<string, typeof filteredCommunities>()
+    for (const c of filteredCommunities) {
       const list = regionCommMap.get(c.region) ?? []
       list.push(c)
       regionCommMap.set(c.region, list)
@@ -67,7 +81,7 @@ export default function Admin() {
       region,
       communities: regionCommMap.get(region) ?? [],
     }))
-  }, [communities])
+  }, [filteredCommunities])
 
   const toggleRegion = (region: string) => {
     setExpandedRegions((prev) => {
@@ -82,7 +96,16 @@ export default function Admin() {
     if (user.role === 'group_admin') return '全国'
     if (user.role === 'regional_director') return user.region ?? ''
     if (user.communityIds.length > 0) {
-      const names = user.communityIds
+      let visibleCommunityIds = user.communityIds
+      if (currentUser && currentUser.role !== 'group_admin') {
+        if (currentUser.role === 'regional_director') {
+          const regionCommunityIds = filteredCommunities.map((c) => c.id)
+          visibleCommunityIds = user.communityIds.filter((id) => regionCommunityIds.includes(id))
+        } else if (currentUser.role === 'project_manager' || currentUser.role === 'owner_committee') {
+          visibleCommunityIds = user.communityIds.filter((id) => currentUser.communityIds.includes(id))
+        }
+      }
+      const names = visibleCommunityIds
         .map((id) => communities.find((c) => c.id === id)?.name)
         .filter(Boolean)
       return names.join('、')
@@ -117,7 +140,7 @@ export default function Admin() {
               <Building2 size={16} className="text-cyber-400" />
               <span className="text-sm font-medium text-white">集团</span>
               <span className="text-xs text-gray-500 ml-auto">
-                {communities.length}个社区
+                {filteredCommunities.length}个社区
               </span>
             </button>
 
@@ -188,7 +211,7 @@ export default function Admin() {
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
+              {filteredUsers.map((user) => (
                 <tr
                   key={user.id}
                   className="border-b border-navy-600/50 hover:bg-navy-700/20 transition-colors"

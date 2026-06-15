@@ -102,9 +102,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   getProvinceStats: () => {
-    const { communities } = get()
+    const filteredCommunities = get().getFilteredCommunities()
     const provinceMap = new Map<string, { total: number; count: number }>()
-    for (const c of communities) {
+    for (const c of filteredCommunities) {
       const existing = provinceMap.get(c.province) ?? { total: 0, count: 0 }
       existing.total += c.satisfactionScore
       existing.count += 1

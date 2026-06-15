@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import {
   BarChart3,
@@ -14,7 +14,7 @@ import { weeklyReports } from '../data/mockData'
 import type { WeeklyReport } from '../types'
 
 function highlightNumbers(text: string): React.ReactNode {
-  const regex = /([\d.]+[%小时次天]+)/g
+  const regex = /([\d.]+(?:%|小时|分钟|件|次|天|个月|个))/g
   const parts = text.split(regex)
   return parts.map((part, idx) => {
     if (part.match(regex)) {
@@ -29,12 +29,22 @@ function highlightNumbers(text: string): React.ReactNode {
 }
 
 export default function Reports() {
-  const { communities, getFilteredCommunities, selectedCommunity, setSelectedCommunity } = useAppStore()
+  const { communities, getFilteredCommunities, selectedCommunity, setSelectedCommunity, currentUser } = useAppStore()
   const filteredCommunities = getFilteredCommunities()
 
   const [selectedCommunityId, setSelectedCommunityId] = useState<string>(
     selectedCommunity?.id ?? filteredCommunities[0]?.id ?? ''
   )
+
+  useEffect(() => {
+    const isSelectedInFiltered = filteredCommunities.some((c) => c.id === selectedCommunityId)
+    if (!isSelectedInFiltered) {
+      const newId = filteredCommunities[0]?.id ?? ''
+      setSelectedCommunityId(newId)
+      const found = communities.find((c) => c.id === newId) ?? null
+      setSelectedCommunity(found)
+    }
+  }, [currentUser, filteredCommunities, selectedCommunityId, communities, setSelectedCommunity])
 
   const report: WeeklyReport | undefined = useMemo(() => {
     if (selectedCommunityId) {
